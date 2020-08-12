@@ -1,6 +1,7 @@
 ﻿using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using Microsoft.ApplicationInsights;
+using Microsoft.ApplicationInsights.Channel;
 using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.ApplicationInsights.Extensibility.Implementation.Tracing;
 using System;
@@ -31,8 +32,10 @@ namespace ApplicationInsightsBenchmark
             public BasicBenchmark()
             {
                 this.basicConfig = TelemetryConfiguration.CreateDefault();
+                this.basicConfig.TelemetryChannel = new EmptyChannel();
                 this.basicClient = new TelemetryClient(this.basicConfig);
                 this.configWithMetricExtractor = TelemetryConfiguration.CreateDefault();
+                this.configWithMetricExtractor.TelemetryChannel = new EmptyChannel();
                 this.configWithMetricExtractor.DefaultTelemetrySink.TelemetryProcessorChainBuilder.Use((next) => new AutocollectedMetricsExtractor(next));
                 this.configWithMetricExtractor.DefaultTelemetrySink.TelemetryProcessorChainBuilder.Build();
                 this.clientWithMetricExtractor = new TelemetryClient(configWithMetricExtractor);
@@ -52,11 +55,45 @@ namespace ApplicationInsightsBenchmark
 
             private void TrackRequest(TelemetryClient client)
             {
-                for (int i = 0; i < 10000; i++)
-                {
-                    client.TrackRequest("MyReq", DateTimeOffset.Now, TimeSpan.FromMilliseconds(34),
-                        resCodes[rand.Next(0, 5)], (rand.Next(1, 10) < 4) ? true : false);
-                }
+                client.TrackRequest("MyReq", DateTimeOffset.Now, TimeSpan.FromMilliseconds(34),
+                    resCodes[rand.Next(0, 5)], (rand.Next(1, 10) < 4) ? true : false);
+            }
+        }
+
+        internal class MyRoleInstanceInitialier : ITelemetryInitializer
+        {
+            public void Initialize(ITelemetry telemetry)
+            {
+                telemetry.Context.Cloud.RoleInstance = "MyRoleInstance";
+            }
+        }
+
+        internal class MyRoleNameInitialier : ITelemetryInitializer
+        {
+            string[] roles = new string[] { "RoleNameA", "RoleNameB" };
+            Random rand = new Random();
+
+            public void Initialize(ITelemetry telemetry)
+            {
+                telemetry.Context.Cloud.RoleName = roles[rand.Next(0, 2)];
+            }
+        }
+
+        internal class EmptyChannel : ITelemetryChannel
+        {
+            public bool? DeveloperMode { get; set; }
+            public string EndpointAddress { get; set; }
+
+            public void Dispose()
+            {
+            }
+
+            public void Flush()
+            {
+            }
+
+            public void Send(ITelemetry item)
+            {
             }
         }
     }
